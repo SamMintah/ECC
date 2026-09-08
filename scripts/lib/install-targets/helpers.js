@@ -1,17 +1,26 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const {
+  CLAUDE_HOOKS_CONFIG_PATH,
+  getClaudeSettingsPath,
+} = require('../install/claude-settings');
 
 const PLATFORM_SOURCE_PATH_OWNERS = Object.freeze({
   '.claude-plugin': 'claude',
   '.codex': 'codex',
   '.cursor': 'cursor',
   '.gemini': 'gemini',
+  '.hermes': 'hermes',
+  '.kimi': 'kimi',
+  '.kimi-code': 'kimi',
   '.joycode': 'joycode',
   '.opencode': 'opencode',
+  '.openclaw': 'openclaw',
   '.codebuddy': 'codebuddy',
   '.qwen': 'qwen',
   '.zed': 'zed',
+  '.adal': 'adal',
 });
 
 function normalizeRelativePath(relativePath) {
@@ -141,6 +150,42 @@ function createRemappedOperation(adapter, moduleId, sourceRelativePath, destinat
   });
 }
 
+function planClaudeHooksOperations(adapter, module, input) {
+  const operations = [
+    createRemappedOperation(
+      adapter,
+      module.id,
+      CLAUDE_HOOKS_CONFIG_PATH,
+      getClaudeSettingsPath(adapter.resolveRoot(input)),
+      {
+        kind: 'update-claude-settings',
+        strategy: 'merge-hook-ids',
+      }
+    ),
+  ];
+
+  if (!input.repoRoot) {
+    return operations;
+  }
+
+  const sourceHooksRoot = path.join(input.repoRoot, 'hooks');
+  if (!fs.existsSync(sourceHooksRoot)) {
+    return operations;
+  }
+
+  return [
+    ...operations,
+    ...fs.readdirSync(sourceHooksRoot, { withFileTypes: true })
+      .filter(entry => entry.name !== 'hooks.json')
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map(entry => adapter.createScaffoldOperation(
+        module.id,
+        path.join('hooks', entry.name),
+        input
+      )),
+  ];
+}
+
 function createNamespacedFlatRuleOperations(adapter, moduleId, sourceRelativePath, input = {}) {
   const normalizedSourcePath = normalizeRelativePath(sourceRelativePath);
   const sourceRoot = path.join(input.repoRoot || '', normalizedSourcePath);
@@ -260,6 +305,9 @@ function createInstallTargetAdapter(config) {
     },
     resolveRoot(input = {}) {
       const baseRoot = resolveBaseRoot(config.kind, input);
+      if (typeof config.resolveRoot === 'function') {
+        return config.resolveRoot(input, baseRoot);
+      }
       return path.join(baseRoot, ...config.rootSegments);
     },
     getInstallStatePath(input = {}) {
@@ -365,4 +413,5 @@ module.exports = {
   createRemappedOperation,
   isForeignPlatformPath,
   normalizeRelativePath,
+  planClaudeHooksOperations,
 };

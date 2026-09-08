@@ -8,6 +8,7 @@ const {
   parseArgs,
   usage,
 } = require('./lib/control-pane/server');
+const { describeMissingDependencyError } = require('./lib/missing-dependency');
 
 function openBrowser(url) {
   if (process.platform !== 'darwin') return;
@@ -34,6 +35,7 @@ async function main(argv = process.argv) {
 
   console.log(`ECC Control Pane: ${app.url}`);
   console.log(`ECC2 database: ${app.config.dbPath}`);
+  console.log(`ECC state database: ${app.config.stateDbPath}`);
   console.log(args.allowActions ? 'Actions: enabled for local allowlist' : 'Actions: read-only');
 
   if (args.openBrowser) {
@@ -54,7 +56,7 @@ async function main(argv = process.argv) {
 
 if (require.main === module) {
   main().catch(error => {
-    console.error(`[control-pane] ${error.message}`);
+    console.error(`[control-pane] ${describeMissingDependencyError(error) || error.message}`);
     process.exit(1);
   });
 }
